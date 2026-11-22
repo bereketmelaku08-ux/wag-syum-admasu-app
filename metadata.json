@@ -1,0 +1,6 @@
+{
+  "name": "ዋግ ስዩ 2ኛ ደረጃ ትምህርት ቤት — APK Portal",
+  "description": "ዋግ ስዩ 2ኛ ደረጃ ትምህርት ቤት የአንድሮይድ መተግበሪያዎች (APK) ማውረጃ እና ማስተዳደሪያ ድረ-ገጽ።",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
