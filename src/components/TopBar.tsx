@@ -1,12 +1,14 @@
 import { Download, Home, ShieldCheck } from 'lucide-react';
 import type { AppView } from '../types';
+import type { Translations } from '../i18n';
 
 interface TopBarProps {
   currentView: AppView;
+  t: Translations;
   onNavigate: (view: AppView, scrollToGuide?: boolean) => void;
 }
 
-export function TopBar({ currentView, onNavigate }: TopBarProps) {
+export function TopBar({ currentView, t, onNavigate }: TopBarProps) {
   return (
     <>
       <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur-md">
@@ -15,14 +17,14 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
           <button
             type="button"
             onClick={() => onNavigate('home')}
-            className="text-left text-base font-bold tracking-tight text-slate-900 whitespace-nowrap truncate max-w-[215px] sm:max-w-none shrink-0 hover:text-blue-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 rounded-md px-1 py-1 sm:text-lg"
+            className="text-left text-base font-bold tracking-tight text-slate-900 whitespace-nowrap truncate max-w-[210px] sm:max-w-none shrink-0 hover:text-blue-900 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 rounded-md px-1 py-1 sm:text-lg"
           >
-            ዋግ ስዩም አድማሱ ወሰን 2ኛ ደረጃ ትምህርት ቤት
+            {t.schoolName}
           </button>
 
           {/* Zone 2: Concise single-line navigation links */}
           <nav
-            aria-label="ዋና ማውጫ"
+            aria-label={t.nav.ariaMain}
             className="hidden md:flex items-center gap-6 text-sm font-medium text-slate-600"
           >
             <button
@@ -32,7 +34,7 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
                 currentView === 'home' ? 'text-blue-900 font-semibold underline underline-offset-8 decoration-2' : ''
               }`}
             >
-              መነሻ
+              {t.nav.home}
             </button>
             <button
               type="button"
@@ -41,14 +43,14 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
                 currentView === 'download' ? 'text-blue-900 font-semibold underline underline-offset-8 decoration-2' : ''
               }`}
             >
-              አፕሊኬሽኖች
+              {t.nav.apps}
             </button>
             <button
               type="button"
               onClick={() => onNavigate('download', true)}
               className="whitespace-nowrap shrink-0 py-1 transition-colors hover:text-slate-950"
             >
-              አጫጫን መመሪያ
+              {t.nav.guide}
             </button>
             <button
               type="button"
@@ -57,7 +59,7 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
                 currentView === 'admin' ? 'text-blue-900 font-semibold underline underline-offset-8 decoration-2' : ''
               }`}
             >
-              አድሚን
+              {t.nav.admin}
             </button>
           </nav>
 
@@ -69,7 +71,7 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
               className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-blue-900 px-4 py-2 text-xs font-semibold text-white whitespace-nowrap shrink-0 transition-colors hover:bg-blue-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 focus-visible:ring-offset-2 sm:text-sm"
             >
               <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
-              <span>አፕ አውርድ</span>
+              <span>{t.nav.downloadCta}</span>
             </button>
           </div>
         </div>
@@ -77,7 +79,7 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
 
       {/* Mobile bottom tab bar within 15% height cap */}
       <nav
-        aria-label="የሞባይል ማውጫ"
+        aria-label={t.nav.ariaMobile}
         className="fixed bottom-0 left-0 right-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur-md md:hidden"
       >
         <div className="grid h-14 grid-cols-3 items-center">
@@ -89,7 +91,7 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
             }`}
           >
             <Home className="h-5 w-5" aria-hidden="true" />
-            <span>መነሻ</span>
+            <span>{t.nav.home}</span>
           </button>
           <button
             type="button"
@@ -99,7 +101,7 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
             }`}
           >
             <Download className="h-5 w-5" aria-hidden="true" />
-            <span>አውርድ</span>
+            <span>{t.nav.downloadShort}</span>
           </button>
           <button
             type="button"
@@ -109,7 +111,7 @@ export function TopBar({ currentView, onNavigate }: TopBarProps) {
             }`}
           >
             <ShieldCheck className="h-5 w-5" aria-hidden="true" />
-            <span>አድሚን</span>
+            <span>{t.nav.admin}</span>
           </button>
         </div>
       </nav>

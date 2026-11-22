@@ -14,11 +14,13 @@ import {
   Upload,
 } from 'lucide-react';
 import type { AdminApk } from '../types';
+import type { Translations } from '../i18n';
 import { formatBytes, formatDateShort } from '../utils/format';
 
 interface AdminSectionProps {
   authToken: string | null;
   adminUsername: string | null;
+  t: Translations;
   onLoginSuccess: (token: string, username: string) => void;
   onLogout: () => void;
   onPublicDataChanged: () => void;
@@ -28,6 +30,7 @@ interface AdminSectionProps {
 export function AdminSection({
   authToken,
   adminUsername,
+  t,
   onLoginSuccess,
   onLogout,
   onPublicDataChanged,
@@ -46,7 +49,7 @@ export function AdminSection({
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
-  // Upload workflow state (File select -> Upload 1%-100% -> Publish 'ልቀቅ')
+  // Upload workflow state (File select -> Upload 1%-100% -> Publish)
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [appName, setAppName] = useState('');
@@ -75,15 +78,15 @@ export function AdminSection({
       }
       const data = (await res.json()) as { apps?: AdminApk[]; error?: string };
       if (!res.ok) {
-        throw new Error(data.error || 'ዝርዝሩን ማምጣት አልተቻለም።');
+        throw new Error(data.error || t.admin.fetchAppsError);
       }
       setApps(data.apps || []);
     } catch (err) {
-      setWorkspaceError(err instanceof Error ? err.message : 'ያልታወቀ ስህተት ተከስቷል።');
+      setWorkspaceError(err instanceof Error ? err.message : t.admin.unknownError);
     } finally {
       setLoadingApps(false);
     }
-  }, [authToken, onLogout]);
+  }, [authToken, onLogout, t.admin.fetchAppsError, t.admin.unknownError]);
 
   useEffect(() => {
     if (authToken) {
@@ -95,7 +98,7 @@ export function AdminSection({
     e.preventDefault();
     setLoginError(null);
     if (!username.trim() || !password) {
-      setLoginError('እባክዎ የተጠቃሚ ስም እና የይለፍ ቃል ያስገቡ።');
+      setLoginError(t.admin.missingCredsError);
       return;
     }
 
@@ -108,12 +111,12 @@ export function AdminSection({
       });
       const data = (await res.json()) as { token?: string; username?: string; error?: string };
       if (!res.ok || !data.token || !data.username) {
-        throw new Error(data.error || 'መግባት አልተቻለም።');
+        throw new Error(data.error || t.admin.loginFailedError);
       }
       setPassword('');
       onLoginSuccess(data.token, data.username);
     } catch (err) {
-      setLoginError(err instanceof Error ? err.message : 'መግባት አልተቻለም።');
+      setLoginError(err instanceof Error ? err.message : t.admin.loginFailedError);
     } finally {
       setLoginLoading(false);
     }
@@ -127,7 +130,7 @@ export function AdminSection({
     if (!file) return;
 
     if (!file.name.toLowerCase().endsWith('.apk')) {
-      setWorkspaceError('እባክዎ .apk ፋይል ብቻ ይምረጡ።');
+      setWorkspaceError(t.admin.onlyApkError);
       e.target.value = '';
       return;
     }
@@ -136,7 +139,7 @@ export function AdminSection({
     setUploadProgress(0);
     setUploadedBytes(0);
     const cleanName = file.name.replace(/\.apk$/i, '').replace(/[_-]+/g, ' ').trim();
-    setAppName(cleanName || 'ዋግ ስዩም አድማሱ ወሰን አፕሊኬሽን');
+    setAppName(cleanName || t.admin.defaultAppName);
   };
 
   const handleStartUpload = () => {
@@ -183,16 +186,16 @@ export function AdminSection({
           if (fileInputRef.current) fileInputRef.current.value = '';
           void fetchAdminApps();
         } else {
-          setWorkspaceError(data.error || 'ፋይሉን መጫን አልተቻለም።');
+          setWorkspaceError(data.error || t.admin.unknownError);
         }
       } catch {
-        setWorkspaceError('የሰርቨር ምላሽ ስህተት ተከስቷል።');
+        setWorkspaceError(t.admin.serverParseError);
       }
     };
 
     xhr.onerror = () => {
       setUploading(false);
-      setWorkspaceError('የኢንተርኔት ወይም የሰርቨር ግንኙነት ተቋርጧል። እባክዎ እንደገና ይሞክሩ።');
+      setWorkspaceError(t.admin.networkError);
     };
 
     xhr.send(formData);
@@ -218,14 +221,14 @@ export function AdminSection({
       }
       const data = (await res.json()) as { app?: AdminApk; error?: string };
       if (!res.ok || !data.app) {
-        throw new Error(data.error || 'አፕሊኬሽኑን መልቀቅ አልተቻለም።');
+        throw new Error(data.error || t.admin.unknownError);
       }
       setReadyToPublishApp(null);
-      setStatusMessage(`«${data.app.appName}» በተሳካ ሁኔታ ተለቋል! ተጠቃሚዎች አሁን ማውረድ ይችላሉ።`);
+      setStatusMessage(t.admin.publishedSuccess(data.app.appName));
       await fetchAdminApps();
       onPublicDataChanged();
     } catch (err) {
-      setWorkspaceError(err instanceof Error ? err.message : 'መልቀቅ አልተቻለም።');
+      setWorkspaceError(err instanceof Error ? err.message : t.admin.unknownError);
     } finally {
       setPublishingId(null);
     }
@@ -247,13 +250,13 @@ export function AdminSection({
       }
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || 'ማስቆም አልተቻለም።');
+        throw new Error(data.error || t.admin.unknownError);
       }
-      setStatusMessage('አፕሊኬሽኑ ከህዝብ ማውረጃ ዝርዝር ተነስቷል።');
+      setStatusMessage(t.admin.unpublishedSuccess);
       await fetchAdminApps();
       onPublicDataChanged();
     } catch (err) {
-      setWorkspaceError(err instanceof Error ? err.message : 'ስህተት ተከስቷል።');
+      setWorkspaceError(err instanceof Error ? err.message : t.admin.unknownError);
     } finally {
       setPublishingId(null);
     }
@@ -275,15 +278,15 @@ export function AdminSection({
       }
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        throw new Error(data.error || 'ማጥፋት አልተቻለም።');
+        throw new Error(data.error || t.admin.unknownError);
       }
       setConfirmDeleteId(null);
       if (readyToPublishApp?.id === id) setReadyToPublishApp(null);
-      setStatusMessage('አፕሊኬሽኑ ተሰርዟል።');
+      setStatusMessage(t.admin.deletedSuccess);
       await fetchAdminApps();
       onPublicDataChanged();
     } catch (err) {
-      setWorkspaceError(err instanceof Error ? err.message : 'ማጥፋት አልተቻለም።');
+      setWorkspaceError(err instanceof Error ? err.message : t.admin.unknownError);
     } finally {
       setPublishingId(null);
     }
@@ -292,15 +295,15 @@ export function AdminSection({
   // Unauthenticated Admin Login Screen
   if (!authToken) {
     return (
-      <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+      <section className="mx-auto max-w-5xl px-4 pb-8 pt-4 sm:px-6 sm:pb-10">
         <div className="mb-6">
           <button
             type="button"
             onClick={onBack}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 whitespace-nowrap transition-colors hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
           >
             <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>ወደ መነሻ ተመለስ</span>
+            <span>{t.admin.backHome}</span>
           </button>
         </div>
 
@@ -310,13 +313,13 @@ export function AdminSection({
               <Lock className="h-5 w-5" aria-hidden="true" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-slate-900">አድሚን መግቢያ</h1>
-              <p className="text-xs text-slate-500">ዋግ ስዩም አድማሱ ወሰን 2ኛ ደረጃ ትምህርት ቤት</p>
+              <h1 className="text-xl font-bold text-slate-900">{t.admin.loginTitle}</h1>
+              <p className="text-xs text-slate-500">{t.schoolName}</p>
             </div>
           </div>
 
           <p className="mb-6 text-sm leading-relaxed text-slate-600">
-            ይህ ክፍል ለአስተዳዳሪው ብቻ ነው። የኤፒኬ (APK) ፋይሎችን ለመጫንና ለመልቀቅ የተጠቃሚ ስም እና የይለፍ ቃል ያስገቡ።
+            {t.admin.loginDesc}
           </p>
 
           {loginError && (
@@ -332,7 +335,7 @@ export function AdminSection({
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label htmlFor="admin-username" className="mb-1.5 block text-sm font-medium text-slate-800">
-                የተጠቃሚ ስም (Username)
+                {t.admin.usernameLabel}
               </label>
               <input
                 id="admin-username"
@@ -340,7 +343,7 @@ export function AdminSection({
                 autoComplete="username"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="የተጠቃሚ ስም ያስገቡ"
+                placeholder={t.admin.usernamePlaceholder}
                 className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                 required
               />
@@ -348,7 +351,7 @@ export function AdminSection({
 
             <div>
               <label htmlFor="admin-password" className="mb-1.5 block text-sm font-medium text-slate-800">
-                የይለፍ ቃል (Password)
+                {t.admin.passwordLabel}
               </label>
               <div className="relative">
                 <input
@@ -357,14 +360,14 @@ export function AdminSection({
                   autoComplete="current-password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="የይለፍ ቃል ያስገቡ"
+                  placeholder={t.admin.passwordPlaceholder}
                   className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white py-2.5 pl-3.5 pr-12 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword((prev) => !prev)}
-                  aria-label={showPassword ? 'የይለፍ ቃል ደብቅ' : 'የይለፍ ቃል አሳይ'}
+                  aria-label={showPassword ? t.admin.hidePassword : t.admin.showPassword}
                   className="absolute right-1 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-lg text-slate-500 hover:text-slate-800"
                 >
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -377,7 +380,7 @@ export function AdminSection({
               disabled={loginLoading}
               className="mt-2 inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-blue-900 px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-800 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 focus-visible:ring-offset-2"
             >
-              {loginLoading ? 'በማረጋገጥ ላይ...' : 'ግባ'}
+              {loginLoading ? t.admin.verifying : t.admin.loginBtn}
             </button>
           </form>
         </div>
@@ -387,28 +390,28 @@ export function AdminSection({
 
   // Authenticated Admin Workspace
   return (
-    <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+    <section className="mx-auto max-w-5xl px-4 pb-8 pt-4 sm:px-6 sm:pb-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 whitespace-nowrap transition-colors hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>ወደ መነሻ ተመለስ</span>
+          <span>{t.admin.backHome}</span>
         </button>
 
         <div className="flex items-center gap-4">
           <span className="text-sm text-slate-600">
-            አድሚን: <strong className="font-semibold text-slate-900">{adminUsername}</strong>
+            {t.admin.adminLabel}: <strong className="font-semibold text-slate-900">{adminUsername}</strong>
           </span>
           <button
             type="button"
             onClick={onLogout}
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-red-50 hover:border-red-200 hover:text-red-700"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 whitespace-nowrap transition-colors hover:bg-red-50 hover:border-red-200 hover:text-red-700"
           >
             <LogOut className="h-4 w-4 shrink-0" aria-hidden="true" />
-            <span>ውጣ</span>
+            <span>{t.admin.logout}</span>
           </button>
         </div>
       </div>
@@ -437,10 +440,10 @@ export function AdminSection({
       <div className="mb-10 rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
         <div className="mb-6">
           <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">
-            ፋይል ኤፒኬ አፕሎድ ለማድረግ
+            {t.admin.uploadTitle}
           </h1>
           <p className="mt-1.5 text-sm text-slate-600">
-            ከስልክዎ ወይም ከኮምፒውተርዎ የኤፒኬ (.apk) ፋይል ይምረጡ፣ አፕሎድ ያድርጉና 100% ሲሞላ «ልቀቅ» የሚለውን ይጫኑ።
+            {t.admin.uploadDesc}
           </p>
         </div>
 
@@ -465,10 +468,10 @@ export function AdminSection({
               <Upload className="h-6 w-6" aria-hidden="true" />
             </div>
             <span className="text-base font-bold text-slate-900 sm:text-lg">
-              ፋይል ኤፒኬ አፕሎድ ለማድረግ ይምረጡ
+              {t.admin.pickFileTitle}
             </span>
             <span className="mt-1.5 text-sm text-slate-500">
-              ይህንን ሲነኩ ወደ ስልክዎ ፋይሎች (Internal Storage) ይወስድዎታል · .apk እስከ 250 MB
+              {t.admin.pickFileHint}
             </span>
           </button>
         )}
@@ -486,23 +489,23 @@ export function AdminSection({
                     {selectedFile.name}
                   </p>
                   <p className="font-mono text-xs text-slate-500 tabular-nums">
-                    መጠን: {formatBytes(selectedFile.size)}
+                    {t.admin.sizePrefix} {formatBytes(selectedFile.size)}
                   </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
-                className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                className="min-h-[40px] rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 whitespace-nowrap hover:bg-slate-50"
               >
-                ሌላ ፋይል ቀይር
+                {t.admin.changeFile}
               </button>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label htmlFor="apk-app-name" className="mb-1.5 block text-sm font-medium text-slate-800">
-                  የአፕሊኬሽኑ ስም
+                  {t.admin.appNameLabel}
                 </label>
                 <input
                   id="apk-app-name"
@@ -514,7 +517,7 @@ export function AdminSection({
               </div>
               <div>
                 <label htmlFor="apk-version" className="mb-1.5 block text-sm font-medium text-slate-800">
-                  ስሪት (Version)
+                  {t.admin.versionLabel}
                 </label>
                 <input
                   id="apk-version"
@@ -528,14 +531,14 @@ export function AdminSection({
 
             <div>
               <label htmlFor="apk-desc" className="mb-1.5 block text-sm font-medium text-slate-800">
-                አጭር መግለጫ (አማራጭ)
+                {t.admin.descLabel}
               </label>
               <input
                 id="apk-desc"
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="ለምሳሌ: የ2018 ዓ.ም የተማሪዎች መማሪያ መተግበሪያ"
+                placeholder={t.admin.descPlaceholder}
                 className="min-h-[44px] w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-900/20"
               />
             </div>
@@ -544,10 +547,10 @@ export function AdminSection({
               <button
                 type="button"
                 onClick={handleStartUpload}
-                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-blue-900 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-800 active:scale-[0.98]"
+                className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-blue-900 px-6 py-3 text-sm font-semibold text-white whitespace-nowrap transition-colors hover:bg-blue-800 active:scale-[0.98]"
               >
                 <Upload className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span>አፕሎድ አድርግ</span>
+                <span>{t.admin.uploadBtn}</span>
               </button>
               <button
                 type="button"
@@ -555,9 +558,9 @@ export function AdminSection({
                   setSelectedFile(null);
                   if (fileInputRef.current) fileInputRef.current.value = '';
                 }}
-                className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 whitespace-nowrap hover:bg-slate-50"
               >
-                ሰርዝ
+                {t.admin.cancelBtn}
               </button>
             </div>
           </div>
@@ -569,7 +572,7 @@ export function AdminSection({
             <div className="mb-3 flex items-baseline justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold text-slate-900">
-                  ኤፒኬ ፋይሉ በመጫን ላይ ነው...
+                  {t.admin.uploadingTitle}
                 </p>
                 {selectedFile && (
                   <p className="mt-0.5 font-mono text-xs text-slate-600 tabular-nums">
@@ -603,7 +606,7 @@ export function AdminSection({
           </div>
         )}
 
-        {/* Step 4: 100% Complete -> Prominent 'ልቀቅ' (Publish) prompt */}
+        {/* Step 4: 100% Complete -> Prominent Publish button */}
         {readyToPublishApp && !uploading && (
           <div className="rounded-xl border border-emerald-300 bg-emerald-50/70 p-6">
             <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
@@ -611,14 +614,14 @@ export function AdminSection({
                 <div className="flex items-center gap-2 text-emerald-800">
                   <CheckCircle2 className="h-5 w-5 shrink-0" aria-hidden="true" />
                   <span className="font-mono text-sm font-bold tabular-nums">
-                    100% አፕሎድ ተጠናቋል!
+                    {t.admin.uploadCompleteBadge}
                   </span>
                 </div>
                 <h2 className="text-lg font-bold text-slate-900">
                   {readyToPublishApp.appName}
                 </h2>
                 <p className="text-sm text-slate-700">
-                  ተማሪዎች እና ተጠቃሚዎች አፕሊኬሽኑን ማውረድ እንዲችሉ አሁን <strong>«ልቀቅ»</strong> የሚለውን ቁልፍ ይጫኑ።
+                  {t.admin.publishPrompt}
                 </p>
               </div>
 
@@ -627,10 +630,12 @@ export function AdminSection({
                   type="button"
                   disabled={publishingId === readyToPublishApp.id}
                   onClick={() => handlePublishApp(readyToPublishApp.id)}
-                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-emerald-700 px-7 py-3 text-sm font-bold text-white transition-colors hover:bg-emerald-800 active:scale-[0.98] disabled:opacity-60"
+                  className="inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-emerald-700 px-7 py-3 text-sm font-bold text-white whitespace-nowrap transition-colors hover:bg-emerald-800 active:scale-[0.98] disabled:opacity-60"
                 >
                   <Rocket className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>{publishingId === readyToPublishApp.id ? 'በመልቀቅ ላይ...' : 'ልቀቅ'}</span>
+                  <span>
+                    {publishingId === readyToPublishApp.id ? t.admin.publishingBtn : t.admin.publishBtn}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -638,9 +643,9 @@ export function AdminSection({
                     setReadyToPublishApp(null);
                     fileInputRef.current?.click();
                   }}
-                  className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="inline-flex min-h-[48px] items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 whitespace-nowrap hover:bg-slate-50"
                 >
-                  ሌላ ፋይል ጫን
+                  {t.admin.uploadAnotherBtn}
                 </button>
               </div>
             </div>
@@ -652,14 +657,14 @@ export function AdminSection({
       <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
         <div className="mb-5 flex items-center justify-between gap-4 border-b border-slate-200 pb-4">
           <h2 className="text-lg font-bold text-slate-900">
-            የተጫኑ አፕሊኬሽኖች ዝርዝር ({apps.length})
+            {t.admin.listTitle(apps.length)}
           </h2>
-          {loadingApps && <span className="text-xs text-slate-500">በማደስ ላይ...</span>}
+          {loadingApps && <span className="text-xs text-slate-500">{t.admin.refreshing}</span>}
         </div>
 
         {apps.length === 0 ? (
           <p className="py-8 text-center text-sm text-slate-500">
-            እስካሁን የተጫነ የኤፒኬ ፋይል የለም። ከላይ ያለውን ቁልፍ ተጭነው የመጀመሪያውን ኤፒኬ ይጫኑ።
+            {t.admin.listEmpty}
           </p>
         ) : (
           <div className="divide-y divide-slate-100">
@@ -675,12 +680,12 @@ export function AdminSection({
                     {app.status === 'published' ? (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
                         <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        <span>ተለቋል (ለህዝብ ክፍት)</span>
+                        <span>{t.admin.statusPublished}</span>
                       </span>
                     ) : (
                       <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700">
                         <Upload className="h-3.5 w-3.5" aria-hidden="true" />
-                        <span>ለመልቀቅ ዝግጁ (ገና አልተለቀቀም)</span>
+                        <span>{t.admin.statusStaged}</span>
                       </span>
                     )}
                   </div>
@@ -693,7 +698,7 @@ export function AdminSection({
                     <span aria-hidden="true">·</span>
                     <span>{formatDateShort(app.uploadedAt)}</span>
                     <span aria-hidden="true">·</span>
-                    <span className="font-mono tabular-nums">{app.downloadCount} ዳውንሎድ</span>
+                    <span className="font-mono tabular-nums">{t.admin.downloadsShort(app.downloadCount)}</span>
                   </div>
                 </div>
 
@@ -703,19 +708,19 @@ export function AdminSection({
                       type="button"
                       disabled={publishingId === app.id}
                       onClick={() => handlePublishApp(app.id)}
-                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-800 disabled:opacity-60"
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-emerald-700 px-4 py-2 text-xs font-semibold text-white whitespace-nowrap hover:bg-emerald-800 disabled:opacity-60"
                     >
                       <Rocket className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>ልቀቅ</span>
+                      <span>{t.admin.publishBtn}</span>
                     </button>
                   ) : (
                     <button
                       type="button"
                       disabled={publishingId === app.id}
                       onClick={() => handleUnpublishApp(app.id)}
-                      className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                      className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-xs font-medium text-slate-700 whitespace-nowrap hover:bg-slate-50 disabled:opacity-60"
                     >
-                      ደብቅ
+                      {t.admin.unpublishBtn}
                     </button>
                   )}
 
@@ -725,27 +730,27 @@ export function AdminSection({
                         type="button"
                         disabled={publishingId === app.id}
                         onClick={() => handleDeleteApp(app.id)}
-                        className="inline-flex min-h-[44px] items-center rounded-lg bg-red-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                        className="inline-flex min-h-[44px] items-center rounded-lg bg-red-600 px-3.5 py-2 text-xs font-semibold text-white whitespace-nowrap hover:bg-red-700 disabled:opacity-60"
                       >
-                        አዎ አጥፋ
+                        {t.admin.confirmDeleteYes}
                       </button>
                       <button
                         type="button"
                         onClick={() => setConfirmDeleteId(null)}
-                        className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        className="inline-flex min-h-[44px] items-center rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-medium text-slate-700 whitespace-nowrap hover:bg-slate-50"
                       >
-                        ተው
+                        {t.admin.confirmDeleteNo}
                       </button>
                     </div>
                   ) : (
                     <button
                       type="button"
                       onClick={() => setConfirmDeleteId(app.id)}
-                      aria-label={`${app.appName} አጥፋ`}
-                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-red-700 hover:border-red-200 hover:bg-red-50"
+                      aria-label={`${app.appName} ${t.admin.deleteBtn}`}
+                      className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-medium text-red-700 whitespace-nowrap hover:border-red-200 hover:bg-red-50"
                     >
                       <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                      <span>አጥፋ</span>
+                      <span>{t.admin.deleteBtn}</span>
                     </button>
                   )}
                 </div>

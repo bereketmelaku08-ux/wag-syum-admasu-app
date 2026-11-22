@@ -1,11 +1,13 @@
 import { ArrowLeft, CheckCircle2, Download, FileArchive, RefreshCw, Smartphone } from 'lucide-react';
 import type { PublicApk } from '../types';
+import type { Translations } from '../i18n';
 import { formatBytes, formatDateShort } from '../utils/format';
 
 interface DownloadSectionProps {
   apps: PublicApk[];
   loading: boolean;
   error: string | null;
+  t: Translations;
   onRefresh: () => void;
   onBack: () => void;
 }
@@ -14,6 +16,7 @@ export function DownloadSection({
   apps,
   loading,
   error,
+  t,
   onRefresh,
   onBack,
 }: DownloadSectionProps) {
@@ -30,34 +33,34 @@ export function DownloadSection({
   };
 
   return (
-    <section className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
+    <section className="mx-auto max-w-5xl px-4 pb-8 pt-4 sm:px-6 sm:pb-10">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 whitespace-nowrap transition-colors hover:bg-slate-50 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
         >
           <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
-          <span>ወደ መነሻ ተመለስ</span>
+          <span>{t.download.backHome}</span>
         </button>
 
         <button
           type="button"
           onClick={onRefresh}
           disabled={loading}
-          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
+          className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 whitespace-nowrap transition-colors hover:bg-slate-50 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
         >
           <RefreshCw className={`h-4 w-4 shrink-0 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
-          <span>አድስ</span>
+          <span>{t.download.refresh}</span>
         </button>
       </div>
 
       <div className="mb-8 border-b border-slate-200 pb-6">
         <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-          አፕሊኬሽን ለማውረድ
+          {t.download.title}
         </h1>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
-          የዋግ ስዩም አድማሱ ወሰን 2ኛ ደረጃ ትምህርት ቤት የአንድሮይድ (APK) መተግበሪያዎችን ያለ ምንም መግቢያ እዚህ ማውረድ እና በስልክዎ ላይ መጫን ይችላሉ።
+          {t.download.subtitle}
         </p>
       </div>
 
@@ -72,7 +75,7 @@ export function DownloadSection({
 
       {loading && apps.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center">
-          <p className="text-sm font-medium text-slate-600">አፕሊኬሽኖች በመፈለግ ላይ ናቸው...</p>
+          <p className="text-sm font-medium text-slate-600">{t.download.loading}</p>
         </div>
       ) : apps.length === 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center">
@@ -80,10 +83,10 @@ export function DownloadSection({
             <Smartphone className="h-7 w-7" aria-hidden="true" />
           </div>
           <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
-            ምንም አይነት አፕሊኬሽን አልተጫነም
+            {t.download.emptyTitle}
           </h2>
           <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-slate-600">
-            አስተዳዳሪው አዲስ የኤፒኬ (APK) ፋይል ሲጭን እና ሲለቅ ወዲያውኑ እዚህ ዝርዝር ውስጥ ይመጣል።
+            {t.download.emptySubtitle}
           </p>
         </div>
       ) : (
@@ -111,7 +114,7 @@ export function DownloadSection({
                       <span aria-hidden="true">·</span>
                       <span>{formatDateShort(app.publishedAt)}</span>
                       <span aria-hidden="true">·</span>
-                      <span className="font-mono tabular-nums">{app.downloadCount} ጊዜ ወርዷል</span>
+                      <span className="font-mono tabular-nums">{t.download.downloadsCount(app.downloadCount)}</span>
                     </div>
                   </div>
                 </div>
@@ -130,7 +133,7 @@ export function DownloadSection({
                   className="inline-flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl bg-blue-900 px-6 py-3 text-sm font-semibold text-white whitespace-nowrap transition-colors hover:bg-blue-800 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 focus-visible:ring-offset-2 sm:w-auto"
                 >
                   <Download className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  <span>ዳውንሎድ አድርግ (.apk)</span>
+                  <span>{t.download.downloadBtn}</span>
                 </button>
               </div>
             </article>
@@ -143,27 +146,21 @@ export function DownloadSection({
         <div className="mb-4 flex items-center gap-2.5">
           <CheckCircle2 className="h-5 w-5 text-emerald-700 shrink-0" aria-hidden="true" />
           <h3 className="text-base font-bold text-slate-900 sm:text-lg">
-            አፕሊኬሽኑን ካወረዱ በኋላ በስልክዎ እንዴት ይጫናል?
+            {t.download.guideTitle}
           </h3>
         </div>
         <ol className="grid gap-4 text-sm text-slate-600 sm:grid-cols-3">
           <li className="space-y-1">
-            <span className="font-mono text-xs font-semibold text-blue-900">01. ያውርዱ</span>
-            <p className="leading-relaxed">
-              ከላይ ያለውን «ዳውንሎድ አድርግ» የሚለውን ቁልፍ ይጫኑና የኤፒኬ ፋይሉ እስኪወርድ ይጠብቁ።
-            </p>
+            <span className="font-mono text-xs font-semibold text-blue-900">{t.download.step1Label}</span>
+            <p className="leading-relaxed">{t.download.step1Text}</p>
           </li>
           <li className="space-y-1">
-            <span className="font-mono text-xs font-semibold text-blue-900">02. ፋይሉን ይክፈቱ</span>
-            <p className="leading-relaxed">
-              ሲወርድ ከላይ በሚመጣው ማሳወቂያ ወይም በስልክዎ «Downloads» አቃፊ ውስጥ ያለውን ፋይል ይንኩት።
-            </p>
+            <span className="font-mono text-xs font-semibold text-blue-900">{t.download.step2Label}</span>
+            <p className="leading-relaxed">{t.download.step2Text}</p>
           </li>
           <li className="space-y-1">
-            <span className="font-mono text-xs font-semibold text-blue-900">03. ኢንስታል ያድርጉ</span>
-            <p className="leading-relaxed">
-              ስልክዎ ከጠየቀ «Allow from this source» የሚለውን አብርተው «Install» የሚለውን በመጫን ይክፈቱት።
-            </p>
+            <span className="font-mono text-xs font-semibold text-blue-900">{t.download.step3Label}</span>
+            <p className="leading-relaxed">{t.download.step3Text}</p>
           </li>
         </ol>
       </div>
