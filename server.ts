@@ -37,10 +37,10 @@ if (!fs.existsSync(METADATA_FILE)) {
   fs.writeFileSync(METADATA_FILE, JSON.stringify([], null, 2), 'utf8');
 }
 
-// Server-side credential verification: supports process.env overrides or salted scrypt hash
-const DEFAULT_ADMIN_USERNAME = 'BEREKET';
+// Server-side credential verification using salted scrypt hash (no plaintext secret stored)
+const DEFAULT_ADMIN_USERNAME = 'wag@siyum';
 const DEFAULT_PASSWORD_HASH =
-  'wagsiyu_2026_v1:ab755f9c550db341d52aebd1b50872e227aeb6aa0f9198a8adec7fea63e4dbdefff40210440572e5941b46322a03cd4251276e5c19014b21eb10e928f1f8861a';
+  'wagsiyum_2026_v2:f46f7508d58172301d9687746d433b5b3489f508d44879effe4d9359afdf7d398e43853e16d893f628a1b8c8932e9b947f7dc93ce32453d1493497027a007ef4';
 
 const SESSION_SECRET =
   process.env.SESSION_SECRET && process.env.SESSION_SECRET.trim().length > 0
@@ -50,28 +50,17 @@ const SESSION_SECRET =
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000;
 
 function verifyAdminCredentials(username: string, password: string): boolean {
-  const configuredUser = (process.env.ADMIN_USERNAME || DEFAULT_ADMIN_USERNAME).trim();
   const inputUser = username.trim();
-
   const userBuf = Buffer.from(inputUser, 'utf8');
-  const expectedUserBuf = Buffer.from(configuredUser, 'utf8');
+  const expectedUserBuf = Buffer.from(DEFAULT_ADMIN_USERNAME, 'utf8');
   const userMatches =
     userBuf.length === expectedUserBuf.length && crypto.timingSafeEqual(userBuf, expectedUserBuf);
 
-  const envPassword = process.env.ADMIN_PASSWORD?.trim();
-  let passwordMatches = false;
-
-  if (envPassword && envPassword.length > 0) {
-    const passHash = crypto.createHash('sha256').update(password).digest();
-    const expectedHash = crypto.createHash('sha256').update(envPassword).digest();
-    passwordMatches = crypto.timingSafeEqual(passHash, expectedHash);
-  } else {
-    const [salt, storedHex] = DEFAULT_PASSWORD_HASH.split(':');
-    const derived = crypto.scryptSync(password, salt, 64);
-    const storedBuf = Buffer.from(storedHex, 'hex');
-    passwordMatches =
-      derived.length === storedBuf.length && crypto.timingSafeEqual(derived, storedBuf);
-  }
+  const [salt, storedHex] = DEFAULT_PASSWORD_HASH.split(':');
+  const derived = crypto.scryptSync(password, salt, 64);
+  const storedBuf = Buffer.from(storedHex, 'hex');
+  const passwordMatches =
+    derived.length === storedBuf.length && crypto.timingSafeEqual(derived, storedBuf);
 
   return userMatches && passwordMatches;
 }
