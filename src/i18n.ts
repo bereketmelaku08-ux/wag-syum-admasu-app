@@ -109,6 +109,8 @@ export interface Translations {
     serverParseError: string;
     fetchAppsError: string;
     unknownError: string;
+    storageGithubActive: string;
+    storageLocalNotice: string;
   };
   footer: {
     copyright: (year: number) => string;
@@ -232,6 +234,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
       serverParseError: 'የሰርቨር ምላሽ ስህተት ተከስቷል።',
       fetchAppsError: 'ዝርዝሩን ማምጣት አልተቻለም።',
       unknownError: 'ያልታወቀ ስህተት ተከስቷል።',
+      storageGithubActive: 'ቋሚ ማከማቻ (GitHub Releases) በርቷል — የተጫኑ ፋይሎች Render ቢታደስም አይጠፉም።',
+      storageLocalNotice: 'ጊዜያዊ ማከማቻ ላይ ነው — በRender ላይ ፋይሎች ቋሚ እንዲሆኑ GITHUB_TOKEN ያስገቡ።',
     },
     footer: {
       copyright: (year) => `© ${year} ዋግ ስዩም አድማሱ ወሰን 2ኛ ደረጃ ትምህርት ቤት — የመተግበሪያ ማውረጃ ፖርታል`,
@@ -354,6 +358,8 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
       serverParseError: 'Invalid response received from server.',
       fetchAppsError: 'Could not load uploaded applications.',
       unknownError: 'An unknown error occurred.',
+      storageGithubActive: 'Permanent storage (GitHub Releases) is active — uploaded APKs persist across restarts.',
+      storageLocalNotice: 'Using temporary local disk — add GITHUB_TOKEN on Render for permanent APK storage.',
     },
     footer: {
       copyright: (year) =>

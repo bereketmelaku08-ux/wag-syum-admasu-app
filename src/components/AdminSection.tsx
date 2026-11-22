@@ -13,7 +13,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import type { AdminApk } from '../types';
+import type { AdminApk, StorageMode } from '../types';
 import type { Translations } from '../i18n';
 import { formatBytes, formatDateShort } from '../utils/format';
 
@@ -45,6 +45,7 @@ export function AdminSection({
 
   // Admin workspace state
   const [apps, setApps] = useState<AdminApk[]>([]);
+  const [storageMode, setStorageMode] = useState<StorageMode | null>(null);
   const [loadingApps, setLoadingApps] = useState(false);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -76,11 +77,18 @@ export function AdminSection({
         onLogout();
         return;
       }
-      const data = (await res.json()) as { apps?: AdminApk[]; error?: string };
+      const data = (await res.json()) as {
+        apps?: AdminApk[];
+        storageMode?: StorageMode;
+        error?: string;
+      };
       if (!res.ok) {
         throw new Error(data.error || t.admin.fetchAppsError);
       }
       setApps(data.apps || []);
+      if (data.storageMode) {
+        setStorageMode(data.storageMode);
+      }
     } catch (err) {
       setWorkspaceError(err instanceof Error ? err.message : t.admin.unknownError);
     } finally {
@@ -415,6 +423,18 @@ export function AdminSection({
           </button>
         </div>
       </div>
+
+      {storageMode && (
+        <div
+          className={`mb-6 rounded-xl border px-4 py-3 text-xs font-medium sm:text-sm ${
+            storageMode === 'github'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+              : 'border-amber-200 bg-amber-50 text-amber-900'
+          }`}
+        >
+          {storageMode === 'github' ? t.admin.storageGithubActive : t.admin.storageLocalNotice}
+        </div>
+      )}
 
       {workspaceError && (
         <div

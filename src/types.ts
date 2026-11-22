@@ -1,5 +1,7 @@
 export type AppView = 'home' | 'download' | 'admin';
 
+export type StorageMode = 'github' | 'local';
+
 export interface PublicApk {
   id: string;
   appName: string;

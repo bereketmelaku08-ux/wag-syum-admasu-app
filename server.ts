@@ -3,7 +3,9 @@ import type { Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import { Readable } from 'node:stream';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -22,20 +24,73 @@ interface ApkRecord {
   downloadCount: number;
 }
 
+interface PublicApkDto {
+  id: string;
+  appName: string;
+  version: string;
+  description: string;
+  originalFilename: string;
+  sizeBytes: number;
+  publishedAt: string | null;
+  downloadCount: number;
+}
+
+interface AdminApkDto extends PublicApkDto {
+  status: 'staged' | 'published';
+  uploadedAt: string;
+}
+
 interface SessionPayload {
   username: string;
   exp: number;
 }
 
+interface GitHubAsset {
+  id: number;
+  name: string;
+  size: number;
+  download_count: number;
+  url: string;
+  browser_download_url: string;
+}
+
+interface GitHubRelease {
+  id: number;
+  tag_name: string;
+  name: string | null;
+  body: string | null;
+  draft: boolean;
+  created_at: string;
+  published_at: string | null;
+  assets: GitHubAsset[];
+}
+
+interface ParsedReleaseMeta {
+  appName?: string;
+  version?: string;
+  description?: string;
+  originalFilename?: string;
+}
+
 const PORT = Number(process.env.PORT || 3000);
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const APK_DIR = path.resolve(DATA_DIR, 'apks');
+const TMP_UPLOAD_DIR = path.resolve(os.tmpdir(), 'wagsiyum-apk-uploads');
 const METADATA_FILE = path.resolve(DATA_DIR, 'apps.json');
 
 fs.mkdirSync(APK_DIR, { recursive: true });
+fs.mkdirSync(TMP_UPLOAD_DIR, { recursive: true });
 if (!fs.existsSync(METADATA_FILE)) {
   fs.writeFileSync(METADATA_FILE, JSON.stringify([], null, 2), 'utf8');
 }
+
+const DEFAULT_GITHUB_REPO = 'bereketmelaku08-ux/wag-syum-admasu-app';
+const RAW_GITHUB_REPO = (process.env.GITHUB_REPO || DEFAULT_GITHUB_REPO).trim();
+const GITHUB_REPO = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(RAW_GITHUB_REPO)
+  ? RAW_GITHUB_REPO
+  : DEFAULT_GITHUB_REPO;
+const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || '').trim();
+const USE_GITHUB_STORAGE = GITHUB_TOKEN.length > 0 && !GITHUB_TOKEN.startsWith('MY_');
 
 // Server-side credential verification using salted scrypt hash (no plaintext secret stored)
 const DEFAULT_ADMIN_USERNAME = 'wag@siyum';
@@ -140,8 +195,14 @@ function writeRecords(records: ApkRecord[]): void {
 
 function sanitizeFilename(name: string): string {
   const base = path.basename(name).replace(/[^a-zA-Z0-9._\-\u1200-\u137F ]+/g, '_').trim();
-  if (!base) return 'wag-siyu-app.apk';
+  if (!base) return 'wag-siyum-app.apk';
   return base.toLowerCase().endsWith('.apk') ? base : `${base}.apk`;
+}
+
+function sanitizeGitHubAssetFilename(name: string): string {
+  const ascii = path.basename(name).replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '');
+  if (!ascii || ascii === '.apk') return 'wag-siyum-app.apk';
+  return ascii.toLowerCase().endsWith('.apk') ? ascii : `${ascii}.apk`;
 }
 
 function resolveSafeApkPath(storedFilename: string): string | null {
@@ -152,9 +213,106 @@ function resolveSafeApkPath(storedFilename: string): string | null {
   return resolved;
 }
 
+function safeUnlink(filePath: string): void {
+  try {
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
+// --- GitHub Releases permanent storage helpers ---
+let cachedRepoPrivate: boolean | null = null;
+
+async function githubApiFetch<T>(apiPath: string, init: RequestInit = {}): Promise<T> {
+  const res = await fetch(`https://api.github.com${apiPath}`, {
+    ...init,
+    headers: {
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'WagSiyum-APK-Portal',
+      ...(init.headers || {}),
+    },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`GitHub API error (${res.status}): ${errText.slice(0, 200)}`);
+  }
+
+  if (res.status === 204) {
+    return undefined as T;
+  }
+
+  return (await res.json()) as T;
+}
+
+async function isGitHubRepoPrivate(): Promise<boolean> {
+  if (cachedRepoPrivate !== null) return cachedRepoPrivate;
+  const repoInfo = await githubApiFetch<{ private: boolean }>(`/repos/${GITHUB_REPO}`);
+  cachedRepoPrivate = Boolean(repoInfo.private);
+  return cachedRepoPrivate;
+}
+
+function buildReleaseBody(meta: ParsedReleaseMeta): string {
+  const cleanDesc = (meta.description || '').trim();
+  const payload = JSON.stringify({
+    appName: meta.appName,
+    version: meta.version,
+    description: cleanDesc,
+    originalFilename: meta.originalFilename,
+  });
+  return `${cleanDesc ? `${cleanDesc}\n\n` : ''}<!-- WAGSIYUM_META:${payload} -->`;
+}
+
+function parseReleaseMeta(release: GitHubRelease, apkAsset: GitHubAsset): ParsedReleaseMeta {
+  const body = release.body || '';
+  const match = body.match(/<!--\s*WAGSIYUM_META:([\s\S]*?)\s*-->/);
+  if (match && match[1]) {
+    try {
+      const parsed = JSON.parse(match[1]) as ParsedReleaseMeta;
+      return parsed;
+    } catch {
+      // Fall through to defaults
+    }
+  }
+  return {
+    appName: release.name || apkAsset.name.replace(/\.apk$/i, ''),
+    version: '1.0',
+    description: body.trim(),
+    originalFilename: apkAsset.name,
+  };
+}
+
+function mapReleaseToAdminDto(release: GitHubRelease): AdminApkDto | null {
+  const apkAsset = release.assets.find((asset) => asset.name.toLowerCase().endsWith('.apk'));
+  if (!apkAsset) return null;
+  const meta = parseReleaseMeta(release, apkAsset);
+  return {
+    id: String(release.id),
+    appName: meta.appName || release.name || apkAsset.name.replace(/\.apk$/i, ''),
+    version: meta.version || '1.0',
+    description: meta.description || '',
+    originalFilename: meta.originalFilename || apkAsset.name,
+    sizeBytes: apkAsset.size,
+    status: release.draft ? 'staged' : 'published',
+    uploadedAt: release.created_at,
+    publishedAt: release.draft ? null : release.published_at || release.created_at,
+    downloadCount: apkAsset.download_count || 0,
+  };
+}
+
+async function listGitHubReleases(): Promise<GitHubRelease[]> {
+  return githubApiFetch<GitHubRelease[]>(`/repos/${GITHUB_REPO}/releases?per_page=50`);
+}
+
+// Multer writes uploaded APKs temporarily to disk (zero RAM bloat for large files)
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, APK_DIR);
+    cb(null, USE_GITHUB_STORAGE ? TMP_UPLOAD_DIR : APK_DIR);
   },
   filename: (_req, _file, cb) => {
     const id = crypto.randomUUID();
@@ -224,31 +382,107 @@ async function startServer(): Promise<void> {
   });
 
   // Public API: get published APKs (no login required)
-  app.get('/api/apps', (_req, res) => {
-    const records = readRecords()
-      .filter((item) => item.status === 'published')
-      .sort((a, b) => {
-        const tA = a.publishedAt ? Date.parse(a.publishedAt) : 0;
-        const tB = b.publishedAt ? Date.parse(b.publishedAt) : 0;
-        return tB - tA;
-      })
-      .map((item) => ({
-        id: item.id,
-        appName: item.appName,
-        version: item.version,
-        description: item.description,
-        originalFilename: item.originalFilename,
-        sizeBytes: item.sizeBytes,
-        publishedAt: item.publishedAt,
-        downloadCount: item.downloadCount,
-      }));
+  app.get('/api/apps', async (_req, res) => {
+    try {
+      if (USE_GITHUB_STORAGE) {
+        const releases = await listGitHubReleases();
+        const apps: PublicApkDto[] = releases
+          .filter((r) => !r.draft)
+          .map(mapReleaseToAdminDto)
+          .filter((item): item is AdminApkDto => item !== null)
+          .sort((a, b) => {
+            const tA = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+            const tB = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+            return tB - tA;
+          })
+          .map(({ status: _status, uploadedAt: _uploadedAt, ...pub }) => pub);
+        res.json({ apps });
+        return;
+      }
 
-    res.json({ apps: records });
+      const records = readRecords()
+        .filter((item) => item.status === 'published')
+        .sort((a, b) => {
+          const tA = a.publishedAt ? Date.parse(a.publishedAt) : 0;
+          const tB = b.publishedAt ? Date.parse(b.publishedAt) : 0;
+          return tB - tA;
+        })
+        .map((item) => ({
+          id: item.id,
+          appName: item.appName,
+          version: item.version,
+          description: item.description,
+          originalFilename: item.originalFilename,
+          sizeBytes: item.sizeBytes,
+          publishedAt: item.publishedAt,
+          downloadCount: item.downloadCount,
+        }));
+
+      res.json({ apps: records });
+    } catch (err) {
+      console.error('Failed to fetch public apps:', err);
+      res.status(500).json({ error: 'አፕሊኬሽኖችን ማምጣት አልተቻለም።' });
+    }
   });
 
   // Public API: download a published APK file
-  app.get('/api/apps/:id/download', (req, res) => {
+  app.get('/api/apps/:id/download', async (req, res) => {
     const { id } = req.params;
+
+    if (USE_GITHUB_STORAGE) {
+      if (!id || !/^\d+$/.test(id)) {
+        res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
+        return;
+      }
+
+      try {
+        const release = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases/${id}`);
+        if (release.draft) {
+          res.status(404).json({ error: 'ይህ አፕሊኬሽን አልተገኘም።' });
+          return;
+        }
+        const apkAsset = release.assets.find((asset) => asset.name.toLowerCase().endsWith('.apk'));
+        if (!apkAsset) {
+          res.status(404).json({ error: 'የኤፒኬ ፋይሉ አልተገኘም።' });
+          return;
+        }
+
+        const isPrivate = await isGitHubRepoPrivate();
+        if (!isPrivate) {
+          res.redirect(302, apkAsset.browser_download_url);
+          return;
+        }
+
+        // Stream asset for private repos
+        const assetRes = await fetch(apkAsset.url, {
+          headers: {
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Accept: 'application/octet-stream',
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'WagSiyum-APK-Portal',
+          },
+        });
+        if (!assetRes.ok || !assetRes.body) {
+          res.status(502).json({ error: 'ፋይሉን ማውረድ አልተቻለም።' });
+          return;
+        }
+        const meta = parseReleaseMeta(release, apkAsset);
+        const downloadName = sanitizeFilename(meta.originalFilename || apkAsset.name);
+        res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+        res.setHeader(
+          'Content-Disposition',
+          `attachment; filename="${downloadName.replace(/"/g, '')}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`
+        );
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        Readable.fromWeb(assetRes.body as unknown as import('node:stream/web').ReadableStream).pipe(res);
+        return;
+      } catch (err) {
+        console.error('GitHub download error:', err);
+        res.status(404).json({ error: 'ይህ አፕሊኬሽን አልተገኘም።' });
+        return;
+      }
+    }
+
     if (!id || !/^[a-zA-Z0-9-]+$/.test(id)) {
       res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
       return;
@@ -310,15 +544,30 @@ async function startServer(): Promise<void> {
   });
 
   // Admin: List all APKs (staged + published)
-  app.get('/api/admin/apps', requireAdmin, (_req, res) => {
-    const records = readRecords().sort(
-      (a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
-    );
-    res.json({ apps: records });
+  app.get('/api/admin/apps', requireAdmin, async (_req, res) => {
+    try {
+      if (USE_GITHUB_STORAGE) {
+        const releases = await listGitHubReleases();
+        const apps = releases
+          .map(mapReleaseToAdminDto)
+          .filter((item): item is AdminApkDto => item !== null)
+          .sort((a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt));
+        res.json({ apps, storageMode: 'github' });
+        return;
+      }
+
+      const records = readRecords().sort(
+        (a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
+      );
+      res.json({ apps: records, storageMode: 'local' });
+    } catch (err) {
+      console.error('Failed to fetch admin apps:', err);
+      res.status(500).json({ error: 'የአፕሊኬሽኖችን ዝርዝር ማምጣት አልተቻለም።' });
+    }
   });
 
-  // Admin: Upload APK file (starts in 'staged' state until admin clicks 'ልቀቅ')
-  app.post('/api/admin/upload', requireAdmin, upload.single('apk'), (req, res) => {
+  // Admin: Upload APK file (starts in 'staged' / draft state until admin clicks 'ልቀቅ')
+  app.post('/api/admin/upload', requireAdmin, upload.single('apk'), async (req, res) => {
     const file = req.file;
     if (!file) {
       res.status(400).json({ error: 'እባክዎ የኤፒኬ (.apk) ፋይል ይምረጡ።' });
@@ -344,6 +593,77 @@ async function startServer(): Promise<void> {
     const description =
       typeof body.description === 'string' ? body.description.trim().slice(0, 400) : '';
 
+    if (USE_GITHUB_STORAGE) {
+      let createdReleaseId: number | null = null;
+      try {
+        const tagName = `apk-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
+        const release = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tag_name: tagName,
+            name: appName,
+            body: buildReleaseBody({ appName, version, description, originalFilename }),
+            draft: true,
+            prerelease: false,
+          }),
+        });
+        createdReleaseId = release.id;
+
+        const assetName = sanitizeGitHubAssetFilename(originalFilename);
+        const uploadUrl = `https://uploads.github.com/repos/${GITHUB_REPO}/releases/${release.id}/assets?name=${encodeURIComponent(assetName)}`;
+        const webStream = Readable.toWeb(fs.createReadStream(file.path));
+
+        const assetRes = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${GITHUB_TOKEN}`,
+            Accept: 'application/vnd.github+json',
+            'Content-Type': 'application/vnd.android.package-archive',
+            'Content-Length': String(file.size),
+            'X-GitHub-Api-Version': '2022-11-28',
+            'User-Agent': 'WagSiyum-APK-Portal',
+          },
+          body: webStream as unknown as BodyInit,
+          duplex: 'half',
+        } as RequestInit & { duplex: 'half' });
+
+        if (!assetRes.ok) {
+          const errText = await assetRes.text().catch(() => '');
+          throw new Error(`Asset upload failed (${assetRes.status}): ${errText.slice(0, 200)}`);
+        }
+
+        const uploadedAsset = (await assetRes.json()) as GitHubAsset;
+        const appDto: AdminApkDto = {
+          id: String(release.id),
+          appName,
+          version,
+          description,
+          originalFilename,
+          sizeBytes: uploadedAsset.size || file.size,
+          status: 'staged',
+          uploadedAt: release.created_at,
+          publishedAt: null,
+          downloadCount: 0,
+        };
+
+        res.status(201).json({ app: appDto });
+      } catch (err) {
+        console.error('GitHub release upload error:', err);
+        if (createdReleaseId !== null) {
+          await githubApiFetch(`/repos/${GITHUB_REPO}/releases/${createdReleaseId}`, {
+            method: 'DELETE',
+          }).catch(() => undefined);
+        }
+        res.status(502).json({
+          error: 'ፋይሉን ወደ GitHub ቋሚ ማከማቻ መጫን አልተቻለም። እባክዎ የGITHUB_TOKEN ፍቃድን ያረጋግጡ።',
+        });
+      } finally {
+        safeUnlink(file.path);
+      }
+      return;
+    }
+
     const id = path.basename(file.filename, '.apk');
     const newRecord: ApkRecord = {
       id,
@@ -367,8 +687,34 @@ async function startServer(): Promise<void> {
   });
 
   // Admin: Publish staged APK ('ልቀቅ')
-  app.post('/api/admin/apps/:id/publish', requireAdmin, (req, res) => {
+  app.post('/api/admin/apps/:id/publish', requireAdmin, async (req, res) => {
     const { id } = req.params;
+
+    if (USE_GITHUB_STORAGE) {
+      if (!id || !/^\d+$/.test(id)) {
+        res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
+        return;
+      }
+
+      try {
+        const updated = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ draft: false }),
+        });
+        const dto = mapReleaseToAdminDto(updated);
+        if (!dto) {
+          res.status(404).json({ error: 'አፕሊኬሽኑ አልተገኘም።' });
+          return;
+        }
+        res.json({ app: dto });
+      } catch (err) {
+        console.error('GitHub publish error:', err);
+        res.status(502).json({ error: 'አፕሊኬሽኑን መልቀቅ አልተቻለም።' });
+      }
+      return;
+    }
+
     if (!id || !/^[a-zA-Z0-9-]+$/.test(id)) {
       res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
       return;
@@ -413,8 +759,34 @@ async function startServer(): Promise<void> {
   });
 
   // Admin: Unpublish APK
-  app.post('/api/admin/apps/:id/unpublish', requireAdmin, (req, res) => {
+  app.post('/api/admin/apps/:id/unpublish', requireAdmin, async (req, res) => {
     const { id } = req.params;
+
+    if (USE_GITHUB_STORAGE) {
+      if (!id || !/^\d+$/.test(id)) {
+        res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
+        return;
+      }
+
+      try {
+        const updated = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases/${id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ draft: true }),
+        });
+        const dto = mapReleaseToAdminDto(updated);
+        if (!dto) {
+          res.status(404).json({ error: 'አፕሊኬሽኑ አልተገኘም።' });
+          return;
+        }
+        res.json({ app: dto });
+      } catch (err) {
+        console.error('GitHub unpublish error:', err);
+        res.status(502).json({ error: 'ማስቆም አልተቻለም።' });
+      }
+      return;
+    }
+
     if (!id || !/^[a-zA-Z0-9-]+$/.test(id)) {
       res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
       return;
@@ -438,8 +810,34 @@ async function startServer(): Promise<void> {
   });
 
   // Admin: Delete APK
-  app.delete('/api/admin/apps/:id', requireAdmin, (req, res) => {
+  app.delete('/api/admin/apps/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
+
+    if (USE_GITHUB_STORAGE) {
+      if (!id || !/^\d+$/.test(id)) {
+        res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
+        return;
+      }
+
+      try {
+        const release = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases/${id}`);
+        await githubApiFetch(`/repos/${GITHUB_REPO}/releases/${id}`, {
+          method: 'DELETE',
+        });
+        if (!release.draft && release.tag_name) {
+          await githubApiFetch(
+            `/repos/${GITHUB_REPO}/git/refs/tags/${encodeURIComponent(release.tag_name)}`,
+            { method: 'DELETE' }
+          ).catch(() => undefined);
+        }
+        res.json({ deletedId: id });
+      } catch (err) {
+        console.error('GitHub delete error:', err);
+        res.status(502).json({ error: 'ማጥፋት አልተቻለም።' });
+      }
+      return;
+    }
+
     if (!id || !/^[a-zA-Z0-9-]+$/.test(id)) {
       res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
       return;
@@ -498,7 +896,11 @@ async function startServer(): Promise<void> {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Wag Siyu APK Portal listening on http://0.0.0.0:${PORT}`);
+    console.log(
+      `Wag Siyum APK Portal listening on http://0.0.0.0:${PORT} (storage: ${
+        USE_GITHUB_STORAGE ? `github:${GITHUB_REPO}` : 'local'
+      })`
+    );
   });
 }
 
