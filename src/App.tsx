@@ -293,7 +293,7 @@ export default function App() {
       <footer className="border-t border-slate-200 bg-white py-5 text-center text-xs text-slate-500">
         <div className="mx-auto max-w-5xl space-y-1.5 px-4 sm:px-6">
           <p>{t.footer.copyright(new Date().getFullYear())}</p>
-          <p className="font-medium text-slate-700">@WEBSITE DEVELOPER BEREKET MELAKU</p>
+          <p className="font-medium text-slate-700">@ BEREKET MELAKU(BEKI)</p>
         </div>
       </footer>
     </div>
