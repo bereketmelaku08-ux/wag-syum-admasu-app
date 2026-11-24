@@ -85,12 +85,21 @@ if (!fs.existsSync(METADATA_FILE)) {
 }
 
 const DEFAULT_GITHUB_REPO = 'bereketmelaku08-ux/wag-syum-admasu-app';
-const RAW_GITHUB_REPO = (process.env.GITHUB_REPO || DEFAULT_GITHUB_REPO).trim();
+const RAW_GITHUB_REPO = (process.env.GITHUB_REPO || DEFAULT_GITHUB_REPO)
+  .trim()
+  .replace(/^['"]|['"]$/g, '');
 const GITHUB_REPO = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/.test(RAW_GITHUB_REPO)
   ? RAW_GITHUB_REPO
   : DEFAULT_GITHUB_REPO;
-const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || '').trim();
-const USE_GITHUB_STORAGE = GITHUB_TOKEN.length > 0 && !GITHUB_TOKEN.startsWith('MY_');
+const GITHUB_TOKEN = (process.env.GITHUB_TOKEN || '')
+  .trim()
+  .replace(/^['"]|['"]$/g, '');
+const IS_VALID_GITHUB_TOKEN_FORMAT =
+  /^(gh[pousr]_[A-Za-z0-9_]{10,}|github_pat_[A-Za-z0-9_]{20,}|[0-9a-f]{40})$/.test(GITHUB_TOKEN);
+let githubAuthRejected = false;
+function isGitHubStorageActive(): boolean {
+  return IS_VALID_GITHUB_TOKEN_FORMAT && !githubAuthRejected;
+}
 
 // Server-side credential verification using salted scrypt hash (no plaintext secret stored)
 const DEFAULT_ADMIN_USERNAME = 'wag@siyum';
@@ -239,6 +248,9 @@ async function githubApiFetch<T>(apiPath: string, init: RequestInit = {}): Promi
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      githubAuthRejected = true;
+    }
     const errText = await res.text().catch(() => '');
     throw new Error(`GitHub API error (${res.status}): ${errText.slice(0, 200)}`);
   }
@@ -312,7 +324,7 @@ async function listGitHubReleases(): Promise<GitHubRelease[]> {
 // Multer writes uploaded APKs temporarily to disk (zero RAM bloat for large files)
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => {
-    cb(null, USE_GITHUB_STORAGE ? TMP_UPLOAD_DIR : APK_DIR);
+    cb(null, isGitHubStorageActive() ? TMP_UPLOAD_DIR : APK_DIR);
   },
   filename: (_req, _file, cb) => {
     const id = crypto.randomUUID();
@@ -383,8 +395,8 @@ async function startServer(): Promise<void> {
 
   // Public API: get published APKs (no login required)
   app.get('/api/apps', async (_req, res) => {
-    try {
-      if (USE_GITHUB_STORAGE) {
+    if (isGitHubStorageActive()) {
+      try {
         const releases = await listGitHubReleases();
         const apps: PublicApkDto[] = releases
           .filter((r) => !r.draft)
@@ -398,8 +410,12 @@ async function startServer(): Promise<void> {
           .map(({ status: _status, uploadedAt: _uploadedAt, ...pub }) => pub);
         res.json({ apps });
         return;
+      } catch (err) {
+        console.warn('GitHub releases fetch failed, falling back to local storage:', err);
       }
+    }
 
+    try {
       const records = readRecords()
         .filter((item) => item.status === 'published')
         .sort((a, b) => {
@@ -429,11 +445,7 @@ async function startServer(): Promise<void> {
   app.get('/api/apps/:id/download', async (req, res) => {
     const { id } = req.params;
 
-    if (USE_GITHUB_STORAGE) {
-      if (!id || !/^\d+$/.test(id)) {
-        res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
-        return;
-      }
+    if (isGitHubStorageActive() && /^\d+$/.test(id)) {
 
       try {
         const release = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases/${id}`);
@@ -545,8 +557,8 @@ async function startServer(): Promise<void> {
 
   // Admin: List all APKs (staged + published)
   app.get('/api/admin/apps', requireAdmin, async (_req, res) => {
-    try {
-      if (USE_GITHUB_STORAGE) {
+    if (isGitHubStorageActive()) {
+      try {
         const releases = await listGitHubReleases();
         const apps = releases
           .map(mapReleaseToAdminDto)
@@ -554,8 +566,12 @@ async function startServer(): Promise<void> {
           .sort((a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt));
         res.json({ apps, storageMode: 'github' });
         return;
+      } catch (err) {
+        console.warn('GitHub admin list failed, falling back to local storage:', err);
       }
+    }
 
+    try {
       const records = readRecords().sort(
         (a, b) => Date.parse(b.uploadedAt) - Date.parse(a.uploadedAt)
       );
@@ -593,7 +609,7 @@ async function startServer(): Promise<void> {
     const description =
       typeof body.description === 'string' ? body.description.trim().slice(0, 400) : '';
 
-    if (USE_GITHUB_STORAGE) {
+    if (isGitHubStorageActive()) {
       let createdReleaseId: number | null = null;
       try {
         const tagName = `apk-${Date.now()}-${crypto.randomBytes(3).toString('hex')}`;
@@ -690,11 +706,7 @@ async function startServer(): Promise<void> {
   app.post('/api/admin/apps/:id/publish', requireAdmin, async (req, res) => {
     const { id } = req.params;
 
-    if (USE_GITHUB_STORAGE) {
-      if (!id || !/^\d+$/.test(id)) {
-        res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
-        return;
-      }
+    if (isGitHubStorageActive() && /^\d+$/.test(id)) {
 
       try {
         const updated = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases/${id}`, {
@@ -762,11 +774,7 @@ async function startServer(): Promise<void> {
   app.post('/api/admin/apps/:id/unpublish', requireAdmin, async (req, res) => {
     const { id } = req.params;
 
-    if (USE_GITHUB_STORAGE) {
-      if (!id || !/^\d+$/.test(id)) {
-        res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
-        return;
-      }
+    if (isGitHubStorageActive() && /^\d+$/.test(id)) {
 
       try {
         const updated = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases/${id}`, {
@@ -813,11 +821,7 @@ async function startServer(): Promise<void> {
   app.delete('/api/admin/apps/:id', requireAdmin, async (req, res) => {
     const { id } = req.params;
 
-    if (USE_GITHUB_STORAGE) {
-      if (!id || !/^\d+$/.test(id)) {
-        res.status(400).json({ error: 'ልክ ያልሆነ መለያ።' });
-        return;
-      }
+    if (isGitHubStorageActive() && /^\d+$/.test(id)) {
 
       try {
         const release = await githubApiFetch<GitHubRelease>(`/repos/${GITHUB_REPO}/releases/${id}`);
@@ -898,7 +902,7 @@ async function startServer(): Promise<void> {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(
       `Wag Siyum APK Portal listening on http://0.0.0.0:${PORT} (storage: ${
-        USE_GITHUB_STORAGE ? `github:${GITHUB_REPO}` : 'local'
+        isGitHubStorageActive() ? `github:${GITHUB_REPO}` : 'local'
       })`
     );
   });
