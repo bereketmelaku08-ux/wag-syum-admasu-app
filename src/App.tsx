@@ -191,13 +191,16 @@ export default function App() {
               </div>
             </section>
 
-            {/* Primary Two-Card Portal Grid */}
-            <section aria-label={t.cards.ariaSection} className="mt-8 grid gap-6 md:grid-cols-2">
-              {/* Card 1: Download Application */}
+            {/* Primary Download Card + Compact Admin Entry */}
+            <section
+              aria-label={t.cards.ariaSection}
+              className="mt-8 flex flex-col items-start gap-4"
+            >
+              {/* Card 1: Download Application (Primary focal card) */}
               <button
                 type="button"
                 onClick={() => handleNavigate('download')}
-                className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 text-left transition-all duration-150 hover:border-blue-900/50 hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 sm:p-8"
+                className="group flex w-full flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 text-left transition-all duration-150 hover:border-blue-900/50 hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 sm:p-8"
               >
                 <div>
                   <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-blue-50 text-blue-900 transition-colors group-hover:bg-blue-900 group-hover:text-white">
@@ -229,35 +232,22 @@ export default function App() {
                 </div>
               </button>
 
-              {/* Card 2: Admin Portal */}
+              {/* Card 2: Admin Portal (Minimal compact card) */}
               <button
                 type="button"
                 onClick={() => handleNavigate('admin')}
-                className="group flex flex-col justify-between rounded-2xl border border-slate-200 bg-white p-6 text-left transition-all duration-150 hover:border-slate-400 hover:shadow-md active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800 sm:p-8"
+                className="group inline-flex min-h-[44px] items-center gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-left transition-all duration-150 hover:border-slate-400 hover:shadow-sm active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-800"
               >
-                <div>
-                  <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-slate-100 text-slate-800 transition-colors group-hover:bg-slate-900 group-hover:text-white">
-                    <ShieldCheck className="h-7 w-7" aria-hidden="true" />
-                  </div>
-                  <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
-                    {t.cards.adminTitle}
-                  </h2>
-                  <p className="mt-2.5 text-sm leading-relaxed text-slate-600 sm:text-base">
-                    {t.cards.adminDesc}
-                  </p>
-                </div>
-
-                <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-4 text-sm">
-                  <span className="text-xs text-slate-500 sm:text-sm">
-                    {authToken && adminUsername
-                      ? t.cards.adminSignedIn(adminUsername)
-                      : t.cards.adminProtected}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 font-semibold text-slate-900 group-hover:translate-x-0.5 transition-transform">
-                    <span>{authToken ? t.cards.goToAdmin : t.cards.login}</span>
-                    <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-                  </span>
-                </div>
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-700 transition-colors group-hover:bg-slate-900 group-hover:text-white">
+                  <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                </span>
+                <span className="text-xs font-bold text-slate-800 sm:text-sm">
+                  {t.cards.adminTitle}
+                </span>
+                <span className="inline-flex items-center gap-1 border-l border-slate-200 pl-3 text-xs font-semibold text-slate-600 group-hover:text-slate-900">
+                  <span>{authToken ? t.cards.goToAdmin : t.cards.login}</span>
+                  <ArrowRight className="h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+                </span>
               </button>
             </section>
           </div>
