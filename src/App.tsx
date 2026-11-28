@@ -7,7 +7,7 @@ import { TRANSLATIONS } from './i18n';
 import type { Locale } from './i18n';
 import type { AppView, PublicApk } from './types';
 
-const CREST_IMAGE = '/src/assets/images/wag_siyu_crest_1795336223010.jpg';
+const CREST_IMAGE = '/assets/aistudio/file_00000000aa54821197f0d52e4e3fe801_57393726.png';
 const CAMPUS_IMAGE = '/src/assets/images/wag_siyu_campus_1795336223673.jpg';
 const LANG_STORAGE_KEY = 'wagsiyum_locale';
 
@@ -163,17 +163,17 @@ export default function App() {
               />
 
               <div className="relative z-10 flex flex-col items-start gap-6 p-6 sm:flex-row sm:items-center sm:p-10">
-                <div className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-white/20 bg-white p-1.5 sm:h-24 sm:w-24">
+                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl border-2 border-amber-300/70 bg-blue-950 shadow-lg sm:h-28 sm:w-28">
                   {!crestFailed ? (
                     <img
                       src={CREST_IMAGE}
                       alt={t.hero.crestAlt}
                       referrerPolicy="no-referrer"
                       onError={() => setCrestFailed(true)}
-                      className="h-full w-full object-contain"
+                      className="h-full w-full object-cover"
                     />
                   ) : (
-                    <GraduationCap className="h-10 w-10 text-blue-900" aria-hidden="true" />
+                    <GraduationCap className="h-12 w-12 text-amber-300" aria-hidden="true" />
                   )}
                 </div>
 
@@ -204,7 +204,10 @@ export default function App() {
                     <Download className="h-7 w-7" aria-hidden="true" />
                   </div>
                   <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
-                    {t.cards.downloadTitle}
+                    <span>{t.cards.downloadTitle}</span>{' '}
+                    <span className="text-base font-bold text-blue-900 sm:text-lg">
+                      {t.cards.downloadTapHint}
+                    </span>
                   </h2>
                   <p className="mt-2.5 text-sm leading-relaxed text-slate-600 sm:text-base">
                     {t.cards.downloadDesc}

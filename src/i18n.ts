@@ -26,6 +26,7 @@ export interface Translations {
   cards: {
     ariaSection: string;
     downloadTitle: string;
+    downloadTapHint: string;
     downloadDesc: string;
     checkingApps: string;
     zeroApps: string;
@@ -145,6 +146,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     cards: {
       ariaSection: 'ዋና አገልግሎቶች',
       downloadTitle: 'አፕሊኬሽን ለማውረድ',
+      downloadTapHint: '(አፕልኬሽኑን ለማውረድ እባክዎ ይህንን ይንኩ)',
       downloadDesc:
         'ለተማሪዎችና ለጎብኚዎች። ምንም አይነት የይለፍ ቃል ወይም ሎጊን ሳይጠይቅ የተለቀቁትን የኤፒኬ ፋይሎች በቀጥታ ያውርዱ።',
       checkingApps: 'በመፈለግ ላይ...',
@@ -268,6 +270,7 @@ export const TRANSLATIONS: Record<Locale, Translations> = {
     cards: {
       ariaSection: 'Main Services',
       downloadTitle: 'Download Application',
+      downloadTapHint: '(Please tap here to download the application)',
       downloadDesc:
         'For students and visitors. Directly download published APK files without any password or login.',
       checkingApps: 'Checking apps...',
